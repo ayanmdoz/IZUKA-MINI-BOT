@@ -7,6 +7,7 @@ const pino = require('pino');
 const cheerio = require('cheerio');
 const { Octokit } = require('@octokit/rest');
 const moment = require('moment-timezone');
+const novosComandos = require('./comandos-novos');
 const Jimp = require('jimp');
 const crypto = require('crypto');
 const axios = require('axios');
@@ -1304,6 +1305,23 @@ const mimetype = mediaMessage.mimetype ||
   }
   break;
 }
+switch (command) {
+    case 'play':
+        await novosComandos.play(socket, m, args, config);
+        break;
+        
+    case 'play_audio':
+        await novosComandos.playAudio(socket, m, args, config);
+        break;
+        
+    case 'play_document':
+        await novosComandos.playDocument(socket, m, args, config);
+        break;
+        
+    case 'play_voice':
+        await novosComandos.playVoice(socket, m, args, config);
+        break;
+}
 // Case: song
 case 'play':
 case 'song': {
@@ -1486,6 +1504,7 @@ case 'song': {
     }
     break;
 }
+
 //===============================   
           case 'logo': { 
                     const q = args.join(" ");
