@@ -1305,23 +1305,6 @@ const mimetype = mediaMessage.mimetype ||
   }
   break;
 }
-switch (command) {
-    case 'play':
-        await novosComandos.play(socket, m, args, config);
-        break;
-        
-    case 'play_audio':
-        await novosComandos.playAudio(socket, m, args, config);
-        break;
-        
-    case 'play_document':
-        await novosComandos.playDocument(socket, m, args, config);
-        break;
-        
-    case 'play_voice':
-        await novosComandos.playVoice(socket, m, args, config);
-        break;
-}
 // ========DOWNLOAD CASES ============
 case 'song':
 case 'play': {
@@ -1338,6 +1321,7 @@ case 'play': {
     const TEMP_DIR = './temp';
     const MAX_FILE_SIZE_MB = 4;
     const TARGET_SIZE_MB = 3.8;
+    const API_KEY = 'seu_api_key_aqui'; // Adicione sua API key
 
     // Ensure temp directory exists
     if (!existsSync(TEMP_DIR)) {
@@ -1345,12 +1329,6 @@ case 'play': {
     }
 
     // Utility functions
-    function formatDuration(seconds) {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = Math.floor(seconds % 60);
-        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-
     async function compressAudio(inputPath, outputPath, targetSizeMB = TARGET_SIZE_MB) {
         try {
             const { stdout: durationOutput } = await execPromise(
@@ -1403,54 +1381,52 @@ case 'play': {
         await socket.sendMessage(sender, { react: { text: '🎵', key: msg.key } });
 
         // Search for the video using the new API
-        const searchUrl = `https://api.vreden.my.id/api/v1/download/play/audio?query=${encodeURIComponent(query)}`;
+        const searchUrl = `https://apis.davidcyriltech.my.id/play?query=${encodeURIComponent(query)}&apikey=${API_KEY}`;
         const response = await axios.get(searchUrl, { timeout: 30000 });
         const data = response.data;
 
-        if (!data.status || !data.result || !data.result.download) {
+        if (!data.status || !data.result || !data.result.download_url) {
             return await socket.sendMessage(sender, 
                 { text: '*`ɴᴏ sᴏɴɢs ғᴏᴜɴᴅ! Try ᴀɴᴏᴛʜᴇʀ`*' }, 
                 { quoted: fakevCard }
             );
         }
 
-        const metadata = data.result.metadata;
-        const download = data.result.download;
+        const result = data.result;
 
-        // Format duration
-        const formattedDuration = formatDuration(metadata.seconds);
-        
         // Create description with buttons
         const desc = `
      IZUKA MINI BOT SONG
 ╭───────────────⭓
-│ ᴛɪᴛʟᴇ: ${metadata.title}
-│ ᴀʀᴛɪsᴛ: ${metadata.author.name}
-│ ᴅᴜʀᴀᴛɪᴏɴ: ${formattedDuration}
-│ ᴜᴘʟᴏᴀᴅᴇᴅ: ${metadata.ago}
-│ ᴠɪᴇᴡs: ${metadata.views.toLocaleString()}
-│ ǫᴜᴀʟɪᴛʏ: ${download.quality}
+│ ᴛɪᴛʟᴇ: ${result.title}
+│ ᴅᴜʀᴀᴛɪᴏɴ: ${result.duration}
+│ ᴜᴘʟᴏᴀᴅᴇᴅ: ${result.published}
+│ ᴠɪᴇᴡs: ${result.views.toLocaleString()}
+│ ғᴏʀᴍᴀᴛ: ʜɪɢʜ ǫᴜᴀʟɪᴛʏ ᴍᴘ3
 ╰───────────────⭓
 > MADE BY AYAN MODZ
 `;
 
+        // Generate unique ID for this request
+        const requestId = Date.now().toString();
+
         // Send video info with buttons
         const playMessage = {
-            image: { url: metadata.image },
+            image: { url: result.thumbnail },
             caption: desc,
             buttons: [
                 {
-                    buttonId: `${config.PREFIX}play_audio_${metadata.videoId}`,
+                    buttonId: `${config.PREFIX}play_audio_${requestId}`,
                     buttonText: { displayText: '🎵 ÁUDIO' },
                     type: 1
                 },
                 {
-                    buttonId: `${config.PREFIX}play_document_${metadata.videoId}`,
+                    buttonId: `${config.PREFIX}play_document_${requestId}`,
                     buttonText: { displayText: '📄 DOCUMENTO' },
                     type: 1
                 },
                 {
-                    buttonId: `${config.PREFIX}play_voice_${metadata.videoId}`,
+                    buttonId: `${config.PREFIX}play_voice_${requestId}`,
                     buttonText: { displayText: '🎤 VOZ' },
                     type: 1
                 }
@@ -1470,17 +1446,19 @@ case 'play': {
 
         // Save data for button handlers
         if (!global.playCache) global.playCache = new Map();
-        global.playCache.set(metadata.videoId, {
-            metadata: metadata,
-            download: download,
+        global.playCache.set(requestId, {
+            title: result.title,
+            download_url: result.download_url,
+            thumbnail: result.thumbnail,
+            duration: result.duration,
             query: query,
             timestamp: Date.now()
         });
 
         // Clean cache after 10 minutes
         setTimeout(() => {
-            if (global.playCache.has(metadata.videoId)) {
-                global.playCache.delete(metadata.videoId);
+            if (global.playCache.has(requestId)) {
+                global.playCache.delete(requestId);
             }
         }, 10 * 60 * 1000);
         
@@ -1496,14 +1474,14 @@ case 'play': {
 
 // HANDLER PARA BOTÃO ÁUDIO
 case 'play_audio': {
-    const videoId = args[0];
-    if (!videoId || !global.playCache || !global.playCache.has(videoId)) {
+    const requestId = args[0];
+    if (!requestId || !global.playCache || !global.playCache.has(requestId)) {
         return await socket.sendMessage(sender, {
             text: '❌ *Sessão expirada!* Use o comando play novamente.'
         }, { quoted: fakevCard });
     }
 
-    const cache = global.playCache.get(videoId);
+    const cache = global.playCache.get(requestId);
     let tempFilePath = '';
     let compressedFilePath = '';
 
@@ -1511,17 +1489,17 @@ case 'play_audio': {
         await socket.sendMessage(sender, { react: { text: '⬇️', key: msg.key } });
 
         await socket.sendMessage(sender, {
-            text: `⬇️ *Downloading audio...*\n\n"${cache.metadata.title}"`
+            text: `⬇️ *Downloading audio...*\n\n"${cache.title}"`
         }, { quoted: fakevCard });
 
         // Download the audio
-        const audioResponse = await axios.get(cache.download.url, {
+        const audioResponse = await axios.get(cache.download_url, {
             responseType: 'arraybuffer',
             timeout: 60000
         });
 
         // Clean title for filename
-        const cleanTitle = cache.metadata.title.replace(/[^\w\s]/gi, '').substring(0, 30);
+        const cleanTitle = cache.title.replace(/[^\w\s]/gi, '').substring(0, 30);
         tempFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_original.mp3`);
         compressedFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_compressed.mp3`);
 
@@ -1565,14 +1543,14 @@ case 'play_audio': {
 
 // HANDLER PARA BOTÃO DOCUMENTO
 case 'play_document': {
-    const videoId = args[0];
-    if (!videoId || !global.playCache || !global.playCache.has(videoId)) {
+    const requestId = args[0];
+    if (!requestId || !global.playCache || !global.playCache.has(requestId)) {
         return await socket.sendMessage(sender, {
             text: '❌ *Sessão expirada!* Use o comando play novamente.'
         }, { quoted: fakevCard });
     }
 
-    const cache = global.playCache.get(videoId);
+    const cache = global.playCache.get(requestId);
     let tempFilePath = '';
     let compressedFilePath = '';
 
@@ -1580,17 +1558,17 @@ case 'play_document': {
         await socket.sendMessage(sender, { react: { text: '⬇️', key: msg.key } });
 
         await socket.sendMessage(sender, {
-            text: `⬇️ *Downloading as document...*\n\n"${cache.metadata.title}"`
+            text: `⬇️ *Downloading as document...*\n\n"${cache.title}"`
         }, { quoted: fakevCard });
 
         // Download the audio
-        const audioResponse = await axios.get(cache.download.url, {
+        const audioResponse = await axios.get(cache.download_url, {
             responseType: 'arraybuffer',
             timeout: 60000
         });
 
         // Clean title for filename
-        const cleanTitle = cache.metadata.title.replace(/[^\w\s]/gi, '').substring(0, 30);
+        const cleanTitle = cache.title.replace(/[^\w\s]/gi, '').substring(0, 30);
         tempFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_original.mp3`);
         compressedFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_compressed.mp3`);
 
@@ -1615,7 +1593,7 @@ case 'play_document': {
             document: audioBuffer,
             mimetype: "audio/mpeg",
             fileName: `${cleanTitle}.mp3`,
-            caption: `🎵 *${cache.metadata.title}*\n👤 ${cache.metadata.author.name}`
+            caption: `🎵 *${cache.title}*\n⏱️ ${cache.duration}`
         }, { quoted: fakevCard });
 
         // Cleanup
@@ -1632,16 +1610,16 @@ case 'play_document': {
     break;
 }
 
-//HANDLER PARA BOTÃO VOZ
+// HANDLER PARA BOTÃO VOZ
 case 'play_voice': {
-    const videoId = args[0];
-    if (!videoId || !global.playCache || !global.playCache.has(videoId)) {
+    const requestId = args[0];
+    if (!requestId || !global.playCache || !global.playCache.has(requestId)) {
         return await socket.sendMessage(sender, {
             text: '❌ *Sessão expirada!* Use o comando play novamente.'
         }, { quoted: fakevCard });
     }
 
-    const cache = global.playCache.get(videoId);
+    const cache = global.playCache.get(requestId);
     let tempFilePath = '';
     let compressedFilePath = '';
 
@@ -1649,17 +1627,17 @@ case 'play_voice': {
         await socket.sendMessage(sender, { react: { text: '⬇️', key: msg.key } });
 
         await socket.sendMessage(sender, {
-            text: `⬇️ *Downloading as voice message...*\n\n"${cache.metadata.title}"`
+            text: `⬇️ *Downloading as voice message...*\n\n"${cache.title}"`
         }, { quoted: fakevCard });
 
         // Download the audio
-        const audioResponse = await axios.get(cache.download.url, {
+        const audioResponse = await axios.get(cache.download_url, {
             responseType: 'arraybuffer',
             timeout: 60000
         });
 
         // Clean title for filename
-        const cleanTitle = cache.metadata.title.replace(/[^\w\s]/gi, '').substring(0, 30);
+        const cleanTitle = cache.title.replace(/[^\w\s]/gi, '').substring(0, 30);
         tempFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_original.mp3`);
         compressedFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_compressed.mp3`);
 
@@ -1700,7 +1678,6 @@ case 'play_voice': {
     }
     break;
 }
-
 //============= Song ==================   
           case 'logo': { 
                     const q = args.join(" ");

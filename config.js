@@ -1,0 +1,23 @@
+module.exports = {
+    AUTO_VIEW_STATUS: 'true',
+    AUTO_LIKE_STATUS: 'true',
+    AUTO_RECORDING: 'true',
+    AUTO_REPLY_STATUS: 'true',
+    AUTO_BIO: 'true',
+    AUTO_LIKE_EMOJI: ['🧩', '🍉', '💜', '🌸', '🪴', '💊', '💫', '🍂', '🌟', '🎋', '😶‍🌫️', '🫀', '🧿', '👀', '😘', '🚩', '🥰', '🗿', '💜', '💙', '🌝', '🖤', '💗'],
+    PREFIX: '.',
+    MAX_RETRIES: 3,
+    GROUP_INVITE_LINK: 'https://chat.whatsapp.com/D2uPHizziioEZce4ev9Kkl?mode=wwt',
+    ADMIN_LIST_PATH: './admin.json',
+    IMAGE_PATH: 'https://files.catbox.moe/a51qw5.jpeg',
+    NEWSLETTER_JID: '120363401819417685@newsletter',
+    NEWSLETTER_MESSAGE_ID: '5775',
+    OTP_EXPIRY: 300000,
+    NEWS_JSON_URL: '',
+    BOT_NAME: 'IZUKA MINI BOT',
+    OWNER_NAME: 'AYAN MODZ',
+    OWNER_NUMBER: '258833406646',
+    BOT_VERSION: '1.0.0',
+    BOT_FOOTER: '©IZUKA MINI BOT*',
+    CHANNEL_LINK: 'https://whatsapp.com/channel/0029VbAsVFh2phHUOXErCs28'
+};
