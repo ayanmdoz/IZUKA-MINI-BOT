@@ -1306,7 +1306,6 @@ const mimetype = mediaMessage.mimetype ||
   break;
 }
 // ========DOWNLOAD CASES ============
-case 'song':
 case 'play': {
     // Import dependencies
     const axios = require('axios');
@@ -1408,44 +1407,46 @@ case 'play': {
             );
         }
 
-        // Usar a nova API com o link do YouTube
+        // Usar a nova API vreden com o link do YouTube
         const youtubeUrl = `https://youtu.be/${videoInfo.videoId}`;
-        const apiUrl = `https://delirius-apiofc.vercel.app/download/ytmp3?url=${encodeURIComponent(youtubeUrl)}`;
+        const apiUrl = `https://api.vreden.my.id/api/v1/download/youtube/audio?url=${encodeURIComponent(youtubeUrl)}&quality=128`;
         
         console.log('🎵 Using API URL:', apiUrl);
 
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const data = response.data;
 
-        if (!data.status || !data.data || !data.data.download) {
+        if (!data.status || !data.result || !data.result.download) {
             return await socket.sendMessage(sender, 
                 { text: '*`ɴᴏ sᴏɴɢs ғᴏᴜɴᴅ! Try ᴀɴᴏᴛʜᴇʀ`*' }, 
                 { quoted: fakevCard }
             );
         }
 
-        const result = data.data;
+        const result = data.result;
+        const metadata = result.metadata;
+        const download = result.download;
 
         // Format duration
-        const formattedDuration = formatDuration(result.duration);
+        const formattedDuration = formatDuration(metadata.seconds);
         
         // Create description
         const desc = `
      IZUKA MINI BOT PLAY
 ╭───────────────⭓
-│ ᴛɪᴛʟᴇ: ${result.title}
-│ ᴀʀᴛɪsᴛ: ${result.author}
+│ ᴛɪᴛʟᴇ: ${metadata.title}
+│ ᴀʀᴛɪsᴛ: ${metadata.author.name}
 │ ᴅᴜʀᴀᴛɪᴏɴ: ${formattedDuration}
-│ ᴠɪᴇᴡs: ${result.views}
-│ ǫᴜᴀʟɪᴛʏ: ${result.download.quality}
-│ sɪᴢᴇ: ${result.download.size}
+│ ᴜᴘʟᴏᴀᴅᴇᴅ: ${metadata.ago}
+│ ᴠɪᴇᴡs: ${metadata.views.toLocaleString()}
+│ ǫᴜᴀʟɪᴛʏ: ${download.quality}
 ╰───────────────⭓
 > MADE BY AYAN MODZ
 `;
 
         // Send video info
         await socket.sendMessage(sender, {
-            image: { url: result.image },
+            image: { url: metadata.image },
             caption: desc,
             contextInfo: {
                 forwardingScore: 1,
@@ -1460,52 +1461,71 @@ case 'play': {
 
         // Download the audio
         await socket.sendMessage(sender, {
-            text: `⬇️ *Downloading audio...*\n\n"${result.title}"\n\n⏳ Please wait...`
+            text: `⬇️ *Downloading audio...*\n\n"${metadata.title}"\n\n⏳ Please wait...`
         }, { quoted: fakevCard });
 
-        console.log('🎵 Downloading from:', result.download.url);
+        console.log('🎵 Download URL:', download.url);
 
-        const audioResponse = await axios.get(result.download.url, {
+        const audioResponse = await axios.get(download.url, {
             responseType: 'arraybuffer',
-            timeout: 60000
+            timeout: 60000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'audio/mpeg, audio/*'
+            }
         });
 
         console.log('✅ Download completed, size:', audioResponse.data.length);
+        console.log('✅ Content-Type:', audioResponse.headers['content-type']);
 
         if (!audioResponse.data || audioResponse.data.length === 0) {
             throw new Error('Downloaded file is empty');
         }
 
-        // Clean title for filename
-        const cleanTitle = result.title.replace(/[^\w\s]/gi, '').substring(0, 30);
-        tempFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_original.mp3`);
-        compressedFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_compressed.mp3`);
+        // Verificar se é realmente um arquivo MP3 válido
+        const buffer = Buffer.from(audioResponse.data);
+        
+        // Verificar assinatura MP3
+        const fileSignature = buffer.slice(0, 3).toString('hex');
+        console.log('🔍 File signature:', fileSignature);
+        
+        // MP3 deve começar com ID3 ou FF FB (MPEG header)
+        if (!fileSignature.startsWith('494433') && !fileSignature.startsWith('fff')) {
+            console.warn('⚠️ File may not be a valid MP3, but trying anyway...');
+        }
 
-        await fs.writeFile(tempFilePath, Buffer.from(audioResponse.data));
+        // Clean title for filename
+        const cleanTitle = metadata.title.replace(/[^\w\s]/gi, '').substring(0, 30);
+        tempFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}.mp3`);
+
+        // Salvar arquivo
+        await fs.writeFile(tempFilePath, buffer);
         console.log('💾 File saved to:', tempFilePath);
 
-        // Check file size
+        // Verificar tamanho do arquivo
         const stats = await fs.stat(tempFilePath);
         const fileSizeMB = stats.size / (1024 * 1024);
         console.log('📊 File size:', fileSizeMB, 'MB');
-        
+
+        // Se o arquivo for muito grande, comprimir
+        let finalBuffer = buffer;
         if (fileSizeMB > MAX_FILE_SIZE_MB) {
             console.log('⚡ Compressing audio...');
+            compressedFilePath = path.join(TEMP_DIR, `${cleanTitle}_${Date.now()}_compressed.mp3`);
             const compressionSuccess = await compressAudio(tempFilePath, compressedFilePath);
             if (compressionSuccess) {
-                await cleanupFiles(tempFilePath);
-                tempFilePath = compressedFilePath;
-                compressedFilePath = '';
-                console.log('✅ Compression successful');
+                finalBuffer = await fs.readFile(compressedFilePath);
+                console.log('✅ Compression successful, new size:', finalBuffer.length);
             }
+        } else {
+            finalBuffer = await fs.readFile(tempFilePath);
         }
 
-        // Send the audio file
-        const audioBuffer = await fs.readFile(tempFilePath);
-        console.log('📤 Sending audio, buffer size:', audioBuffer.length);
+        console.log('📤 Sending audio, buffer size:', finalBuffer.length);
 
+        // Enviar como áudio
         await socket.sendMessage(sender, {
-            audio: audioBuffer,
+            audio: finalBuffer,
             mimetype: "audio/mpeg",
             fileName: `${cleanTitle}.mp3`,
             ptt: false
@@ -1519,6 +1539,7 @@ case 'play': {
         
     } catch (err) {
         console.error('❌ Play command error:', err.message);
+        console.error('❌ Error stack:', err.stack);
         await cleanupFiles(tempFilePath, compressedFilePath);
         await socket.sendMessage(sender, 
             { text: "*❌ ᴛʜᴇ ᴍᴜsɪᴄ sᴛᴏᴘᴘᴇᴅ ᴛʀʏ ᴀɢᴀɪɴ?*" }, 
