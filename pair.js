@@ -1323,8 +1323,8 @@ switch (command) {
         break;
 }
 // Case: song
-case 'play':
-case 'song': {
+case 'play12':
+case 'song12': {
     // Import dependencies
     const yts = require('yt-search');
     const ddownr = require('denethdev-ytmp3');
