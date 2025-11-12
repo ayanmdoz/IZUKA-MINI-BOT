@@ -1306,8 +1306,95 @@ const mimetype = mediaMessage.mimetype ||
   break;
 }
 // ========DOWNLOAD CASES ============
-case 'song':
-case 'play': {
+// SONG DOWNLOAD COMMAND WITH BUTTON
+                case 'song': {
+                    try {
+                        const text = (msg.message.conversation || msg.message.extendedTextMessage.text || '').trim();
+                        const q = text.split(" ").slice(1).join(" ").trim();
+                        if (!q) {
+                            await socket.sendMessage(sender, { 
+                                text: '*🚫 ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ sᴏɴɢ ɴᴀᴍᴇ ᴛᴏ sᴇᴀʀᴄʜ.*',
+                                buttons: [
+                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'ᴍᴇɴᴜ' }, type: 1 }
+                                ]
+                            });
+                            return;
+                        }
+
+                        const searchResults = await yts(q);
+                        if (!searchResults.videos.length) {
+                            await socket.sendMessage(sender, { 
+                                text: '*🚩 Result Not Found*',
+                                buttons: [
+                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'ᴍᴇɴᴜ' }, type: 1 }
+                                ]
+                            });    
+                            return;
+                        }
+
+                        const video = searchResults.videos[0];
+
+                        // API CALL
+                        const apiUrl = `${api}/download/ytmp3?url=${encodeURIComponent(video.url)}&apikey=${apikey}`;
+                        const response = await fetch(apiUrl);
+                        const data = await response.json();
+
+                        if (!data.status || !data.data?.result) {
+                            await socket.sendMessage(sender, { 
+                                text: '*🚩 Download Error. Please try again later.*',
+                                buttons: [
+                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: ' ᴍᴇɴᴜ' }, type: 1 }
+                                ]
+                            });
+                            return;
+                        }
+
+                        const { title, uploader, duration, quality, format, thumbnail, download } = data.data.result;
+
+                        const titleText = '*IZUKA MINI BOT SONG*';
+                        const content = `┏━━━━━━━━━━━━━━━━\n` +
+                            `┃📝 \`Title\` : ${video.title}\n` +
+                            `┃📈 \`Views\` : ${video.views}\n` +
+                            `┃🕛 \`Duration\` : ${video.timestamp}\n` +
+                            `┃🔗 \`URL\` : ${video.url}\n` +
+                            `┗━━━━━━━━━━━━━━━━`;
+
+                        const footer = config.BOT_FOOTER || '';
+                        const captionMessage = formatMessage(titleText, content, footer);
+
+                        await socket.sendMessage(sender, {
+                            image: { url: config.BUTTON_IMAGES.SONG },
+                            caption: captionMessage,
+                            buttons: [
+                                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: ' ᴍᴇɴᴜ' }, type: 1 },
+                                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: ' ʙᴏᴛ ɪɴғᴏ' }, type: 1 }
+                            ]
+                        });
+
+                        await socket.sendMessage(sender, {
+                            audio: { url: download },
+                            mimetype: 'audio/mpeg'
+                        });
+
+                        await socket.sendMessage(sender, {
+                            document: { url: download },
+                            mimetype: "audio/mpeg",
+                            fileName: `${video.title}.mp3`,
+                            caption: captionMessage
+                        });
+
+                    } catch (err) {
+                        console.error(err);
+                        await socket.sendMessage(sender, { 
+                            text: '*❌ ɪɴᴛᴇʀɴᴀʟ ᴇʀʀᴏʀ. ᴘʟᴇᴀꜱᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.*',
+                            buttons: [
+                                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'ᴍᴇɴᴜ' }, type: 1 }
+                            ]
+                        });
+                    }
+                    break;
+                }case 'song3':
+case 'play3': {
     // Import dependencies
     const axios = require('axios');
     const fs = require('fs').promises;
